@@ -17,7 +17,6 @@ from jsonschema_gentypes import (
     TypeProxy,
     configuration,
     get_description,
-    get_name,
     jsonschema_draft_04,
     jsonschema_draft_06,
     jsonschema_draft_2019_09_applicator,
@@ -274,7 +273,7 @@ class APIv4(API):
         for index, sub_schema in enumerate(sub_schemas):
             assert not isinstance(sub_schema, bool)
             sub_schema = self.combined_sub_type(schema, sub_schema)
-            force_sub_type = "title" in sub_schema
+            force_sub_type = False and "title" in sub_schema
             if "allOf" in sub_schema:
                 type_, named_types, combined_schema = self.all_of(
                     sub_schema,
@@ -292,7 +291,7 @@ class APIv4(API):
                         ],
                         combined_schema,
                     )
-                    if not isinstance(type_, NamedType):
+                    if False and not isinstance(type_, NamedType):
                         type_ = TypeAlias(
                             self.get_name(combined_schema_meta_data, proposed_name + " " + sub_name),
                             type_,
@@ -326,7 +325,7 @@ class APIv4(API):
                         ],
                         combined_schemas,
                     )
-                    if not isinstance(type_, NamedType):
+                    if False and not isinstance(type_, NamedType):
                         type_ = TypeAlias(
                             self.get_name(combined_schema_meta_data, proposed_name + " " + sub_name),
                             type_,
@@ -478,7 +477,7 @@ class APIv4(API):
         for index, new_schema in enumerate(sub_schemas):
             assert not isinstance(new_schema, bool)
             new_schema = self.resolve_ref(new_schema)
-            force_sub_type = "title" in new_schema
+            force_sub_type = False and "title" in new_schema
             if "allOf" in new_schema and self.significative_sub_type(new_schema["allOf"]):
                 type_, named_types, combined_schema = self.all_of(
                     self.combined_sub_type(schema, new_schema),
@@ -497,7 +496,7 @@ class APIv4(API):
                         ],
                         combined_schema,
                     )
-                    if not isinstance(type_, NamedType):
+                    if False and not isinstance(type_, NamedType):
                         type_ = TypeAlias(
                             self.get_name(combined_schema_meta_data, f"{proposed_name} {sub_name}{index}"),
                             type_,
@@ -524,7 +523,7 @@ class APIv4(API):
                         ],
                         combined_schemas,
                     )
-                    if not isinstance(type_, NamedType):
+                    if False and not isinstance(type_, NamedType):
                         type_ = TypeAlias(
                             self.get_name(combined_schema_meta_data, f"{proposed_name} {sub_name}{index}"),
                             type_,

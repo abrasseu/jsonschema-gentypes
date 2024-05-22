@@ -169,7 +169,7 @@ class API:
             if description and additional_description:
                 description.append("")
             description += additional_description
-            if description:
+            if False and description:
                 if not isinstance(the_type, NamedType):
                     if auto_alias:
                         the_type = TypeAlias(
@@ -358,7 +358,7 @@ class API:
                 proposed_name,
                 "anyof",
             )
-            if not isinstance(type_, NamedType):
+            if False and not isinstance(type_, NamedType):
                 type_ = TypeAlias(self.get_name(schema_meta_data, proposed_name), type_)
             elif type_.comments():
                 type_.comments().append("")
@@ -437,7 +437,7 @@ class API:
                     )
                 )
             type_ = CombinedType(NativeType("Union"), inner_types)
-            if has_title:
+            if False and has_title:
                 type_ = TypeAlias(name, type_)
             return type_
 

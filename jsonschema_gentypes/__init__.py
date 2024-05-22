@@ -140,14 +140,13 @@ class Type:
         del python_version
         return []
 
-    def definition(self, line_length: Optional[int] = None) -> list[str]:
+    def definition(self, line_length: Optional[int] = None, with_comments: bool = False) -> list[str]:
         """
         Return the type declaration.
 
         Parameter:
             line_length: the maximum line length
         """
-        del line_length
         return []
 
     def depends_on(self) -> list["Type"]:
@@ -200,7 +199,7 @@ class TypeProxy(Type):
         assert self._type is not None
         return self._type.imports(python_version)
 
-    def definition(self, line_length: Optional[int] = None) -> list[str]:
+    def definition(self, line_length: Optional[int] = None, with_comments: bool = False) -> list[str]:
         """
         Return the type declaration.
 
@@ -208,7 +207,7 @@ class TypeProxy(Type):
             line_length: the maximum line length
         """
         assert self._type is not None
-        return self._type.definition()
+        return self._type.definition(line_length=line_length, with_comments=with_comments)
 
     def depends_on(self) -> list["Type"]:
         """
@@ -301,7 +300,8 @@ class LiteralType(Type):
         """
         Return what we need to use the type.
         """
-        return f"Literal[{repr(self.const)}]"
+        params = ", ".join(map(repr, self.const)) if isinstance(self.const, list) else repr(self.const)
+        return f"Literal[{params}]"
 
     def imports(self, python_version: tuple[int, ...]) -> list[tuple[str, str]]:
         """
@@ -426,6 +426,7 @@ class TypeAlias(NamedType):
         super().__init__(name)
         self.sub_type = sub_type
         self._comments = [] if descriptions is None else descriptions
+        print(f"TYPE_ALIAS: {self._name} = {self.sub_type.name()}")
 
     def depends_on(self) -> list[Type]:
         """
@@ -433,17 +434,19 @@ class TypeAlias(NamedType):
         """
         return [self.sub_type] + super().depends_on()
 
-    def definition(self, line_length: Optional[int] = None) -> list[str]:
+    def definition(self, line_length: Optional[int] = None, with_comments: bool = False) -> list[str]:
         """
         Return the type declaration.
         """
         result = ["", ""]
         result.append(f"{self._name} = {self.sub_type.name()}")
-        comments = split_comment(self.comments(), line_length - 2 if line_length else None)
-        if len(comments) == 1:
-            result += [f'""" {comments[0]} """', ""]
-        elif comments:
-            result += ['"""', *comments, '"""', ""]
+
+        if with_comments:
+            comments = split_comment(self.comments(), line_length - 2 if line_length else None)
+            if len(comments) == 1:
+                result += [f'""" {comments[0]} """', ""]
+            elif comments:
+                result += ['"""', *comments, '"""', ""]
 
         return result
 
@@ -466,7 +469,7 @@ class TypeEnum(NamedType):
         super().__init__(name)
         self.values = values
         self.descriptions = descriptions
-        self.sub_type: Type = CombinedType(NativeType("Union"), [LiteralType(value) for value in values])
+        self.sub_type: Type = LiteralType(values)
 
     def depends_on(self) -> list["Type"]:
         """
@@ -474,25 +477,29 @@ class TypeEnum(NamedType):
         """
         return [self.sub_type] + super().depends_on()
 
-    def definition(self, line_length: Optional[int] = None) -> list[str]:
+    def definition(self, line_length: Optional[int] = None, with_comments: bool = False) -> list[str]:
         """
         Return the type declaration.
         """
         result = ["", ""]
-        comments = split_comment(self.descriptions, line_length - 2 if line_length else None)
-        result.append(f"{self._name} = {self.sub_type.name()}")
-        if len(comments) == 1:
-            result += [f'""" {comments[0]} """']
-        elif comments:
-            result += ['"""', *comments, '"""']
-        for value in self.values:
-            name = get_name({"title": f"{self._name} {value}"}, upper=True)
-            formatted_value = f'"{value}"' if isinstance(value, str) else str(value)
-            result.append(f"{name}: {LiteralType(value).name()} = {formatted_value}")
-            name = self.descriptions[0] if self.descriptions else self._name
-            if name.endswith("."):
-                name = name[:-1]
-            result.append(f'"""The values for the \'{name}\' enum"""')
+
+        if with_comments:
+            comments = split_comment(self.descriptions, line_length - 2 if line_length else None)
+            result.append(f"{self._name} = {self.sub_type.name()}")
+            if len(comments) == 1:
+                result += [f'""" {comments[0]} """']
+            elif comments:
+                result += ['"""', *comments, '"""']
+
+        if False:
+            for value in self.values:
+                name = get_name({"title": f"{self._name} {value}"}, upper=True)
+                formatted_value = f'"{value}"' if isinstance(value, str) else str(value)
+                result.append(f"{name}: {LiteralType(value).name()} = {formatted_value}")
+                name = self.descriptions[0] if self.descriptions else self._name
+                if name.endswith("."):
+                    name = name[:-1]
+                result.append(f'"""The values for the \'{name}\' enum"""')
 
         result.append("")
         return result
@@ -544,7 +551,7 @@ class TypedDictType(NamedType):
         result += self.struct.values()
         return result + super().depends_on()
 
-    def definition(self, line_length: Optional[int] = None) -> list[str]:
+    def definition(self, line_length: Optional[int] = None, with_comments: bool = False) -> list[str]:
         """
         Get the definition based on a dict.
         """
@@ -560,27 +567,29 @@ class TypedDictType(NamedType):
         result = ["", ""]
         if supported:
             result.append(f"class {self._name}(TypedDict, total=False):")
-            comments = split_comment(self.descriptions, line_length - 2 if line_length else None)
-            if len(comments) == 1:
-                result.append(f'    """ {comments[0]} """')
-                result.append("")
-            elif comments:
-                result.append('    """')
-                result += [f"    {d}" if d else "" for d in comments]
-                result.append('    """')
-                result.append("")
-
-            for property_, type_obj in self.struct.items():
-                result.append(f"    {property_}: {type_obj.name()}")
-                comments = type_obj.comments()
+            if with_comments:
+                comments = split_comment(self.descriptions, line_length - 2 if line_length else None)
                 if len(comments) == 1:
                     result.append(f'    """ {comments[0]} """')
                     result.append("")
                 elif comments:
                     result.append('    """')
-                    result += [f"    {comment}" if comment else "" for comment in comments]
+                    result += [f"    {d}" if d else "" for d in comments]
                     result.append('    """')
                     result.append("")
+
+            for property_, type_obj in self.struct.items():
+                result.append(f"    {property_}: {type_obj.name()}")
+                if with_comments:
+                    comments = type_obj.comments()
+                    if len(comments) == 1:
+                        result.append(f'    """ {comments[0]} """')
+                        result.append("")
+                    elif comments:
+                        result.append('    """')
+                        result += [f"    {comment}" if comment else "" for comment in comments]
+                        result.append('    """')
+                        result.append("")
         else:
             result += [
                 "# " + d for d in split_comment(self.descriptions, line_length - 2 if line_length else None)
@@ -611,7 +620,7 @@ class Constant(NamedType):
         self.constant = constant
         self.descriptions = descriptions
 
-    def definition(self, line_length: Optional[int] = None) -> list[str]:
+    def definition(self, line_length: Optional[int] = None, with_comments: bool = False) -> list[str]:
         """
         Return the type declaration.
         """
@@ -622,11 +631,12 @@ class Constant(NamedType):
             result.append(f"{self._name}: List[Any] = {repr(self.constant)}")
         else:
             result.append(f"{self._name} = {repr(self.constant)}")
-        comments = split_comment(self.descriptions, line_length - 2 if line_length else None)
-        if len(comments) == 1:
-            result += [f'""" {comments[0]} """', ""]
-        elif comments:
-            result += ['"""', *comments, '"""', ""]
+        if with_comments:
+            comments = split_comment(self.descriptions, line_length - 2 if line_length else None)
+            if len(comments) == 1:
+                result += [f'""" {comments[0]} """', ""]
+            elif comments:
+                result += ['"""', *comments, '"""', ""]
         return result
 
     def imports(self, python_version: tuple[int, ...]) -> list[tuple[str, str]]:
